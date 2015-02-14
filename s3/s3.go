@@ -334,27 +334,34 @@ func (b *Bucket) PutReaderHeader(path string, r io.Reader, length int64, customH
 Copy - copy objects inside bucket
 */
 func (b *Bucket) Copy(oldPath, newPath string, perm ACL) error {
-	if !strings.HasPrefix(oldPath, "/") {
-		oldPath = "/" + oldPath
+	return b.CopyTo(b, oldPath, newPath, perm)
+}
+
+/*
+CopyTo - copy objects within or across buckets
+*/
+func (sourceBucket *Bucket) CopyTo(targetBucket *Bucket, sourcePath, targetPath string, perm ACL) error {
+	if !strings.HasPrefix(sourcePath, "/") {
+		sourcePath = "/" + sourcePath
 	}
 
 	req := &request{
 		method: "PUT",
-		bucket: b.Name,
-		path:   newPath,
+		bucket: targetBucket.Name,
+		path:   targetPath,
 		headers: map[string][]string{
-			"x-amz-copy-source": {amazonEscape("/" + b.Name + oldPath)},
+			"x-amz-copy-source": {amazonEscape("/" + sourceBucket.Name + sourcePath)},
 			"x-amz-acl":         {string(perm)},
 		},
 	}
 
-	err := b.S3.prepare(req)
+	err := sourceBucket.S3.prepare(req)
 	if err != nil {
 		return err
 	}
 
 	for attempt := attempts.Start(); attempt.Next(); {
-		_, err = b.S3.run(req, nil)
+		_, err = sourceBucket.S3.run(req, nil)
 		if shouldRetry(err) && attempt.HasNext() {
 			continue
 		}
